@@ -422,7 +422,7 @@ def run_training_experiment() -> None:
     """
     # TODO: implement full experiment
     from dataset import get_dataloaders
-    from noam_lr_scheduler import NoamScheduler
+    from lr_scheduler import NoamScheduler
 
     config = {
         "d_model": 256,
