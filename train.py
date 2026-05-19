@@ -233,7 +233,43 @@ def evaluate_bleu(
 
     """
     # TODO: Task 3 — loop test set, decode, compute and return BLEU
-    from torchtext.data.metrics import bleu_score as torchtext_bleu
+    from collections import Counter
+    import math
+
+    def _ngrams(tokens, n):
+        return [tuple(tokens[i:i+n]) for i in range(len(tokens)-n+1)]
+
+    def _bleu_score(candidates, references):
+        clipped_counts = Counter()
+        total_counts = Counter()
+        candidate_len = 0
+        reference_len = 0
+
+        for cand, refs in zip(candidates, references):
+            candidate_len += len(cand)
+            reference_len += min(len(r) for r in refs)
+            for n in range(1, 5):
+                cand_ngrams = Counter(_ngrams(cand, n))
+                ref_ngrams = Counter()
+                for ref in refs:
+                    ref_ngrams |= Counter(_ngrams(ref, n))
+                clipped = {ng: min(cnt, ref_ngrams[ng]) for ng, cnt in cand_ngrams.items()}
+                clipped_counts[n] += sum(clipped.values())
+                total_counts[n] += sum(cand_ngrams.values())
+
+        bp = 1.0 if candidate_len >= reference_len else math.exp(1 - reference_len / candidate_len)
+        precisions = []
+        for n in range(1, 5):
+            if total_counts[n] == 0:
+                precisions.append(0.0)
+            else:
+                precisions.append(clipped_counts[n] / total_counts[n])
+
+        if min(precisions) == 0:
+            return 0.0
+
+        log_avg = sum(math.log(p) for p in precisions) / 4
+        return bp * math.exp(log_avg) * 100
 
     model.eval()
 
@@ -279,8 +315,7 @@ def evaluate_bleu(
                 candidate_corpus.append(pred_tokens)
                 references_corpus.append([ref_tokens])
 
-    score = torchtext_bleu(candidate_corpus, references_corpus) * 100
-    return score
+    return _bleu_score(candidate_corpus, references_corpus)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -422,7 +457,7 @@ def run_training_experiment() -> None:
     """
     # TODO: implement full experiment
     from dataset import get_dataloaders
-    from lr_scheduler import NoamScheduler
+    from noam_lr_scheduler import NoamScheduler
 
     config = {
         "d_model": 256,
